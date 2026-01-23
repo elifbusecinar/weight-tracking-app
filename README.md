@@ -4,6 +4,9 @@ A modern, offline-first Progressive Web App for tracking your weight loss journe
 
 ![WeightTrack App](public/icon-512.png)
 
+## 🌐 Live Demo
+[https://weight-tracking-app-rose.vercel.app/](https://weight-tracking-app-rose.vercel.app/)
+
 ## ✨ Features
 
 ### Core Functionality
