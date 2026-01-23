@@ -186,6 +186,74 @@ const getSettings = async () => {
     });
 };
 
+// Statistical Helper Functions
+const getDateRange = (date, days) => {
+    const result = new Date(date);
+    result.setDate(result.getDate() - days);
+    return result;
+};
+
+const calculateAverage = (weights, days) => {
+    if (!weights || weights.length === 0) return 0;
+    const now = new Date();
+    const startDate = getDateRange(now, days);
+
+    // Filters weights within the time range
+    const filteredWeights = weights.filter(w => new Date(w.date) >= startDate);
+
+    if (filteredWeights.length === 0) return 0;
+
+    const sum = filteredWeights.reduce((acc, curr) => acc + curr.weight, 0);
+    return Number((sum / filteredWeights.length).toFixed(1));
+};
+
+const calculateTrendLine = (weights) => {
+    if (weights.length < 2) return [];
+
+    // Simple Linear Regression
+    const data = weights.map((w, i) => ({
+        x: i,
+        y: w.weight,
+        date: w.date
+    })).reverse(); // Oldest to newest for calculation
+
+    const n = data.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+
+    data.forEach(p => {
+        sumX += p.x;
+        sumY += p.y;
+        sumXY += p.x * p.y;
+        sumXX += p.x * p.x;
+    });
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    return data.map(p => ({
+        date: p.date,
+        trend: parseFloat((slope * p.x + intercept).toFixed(1))
+    })).reverse(); // Return to newest to oldest for display match
+};
+
+const analyzeHealthyRate = (weights) => {
+    if (weights.length < 2) return { status: 'insufficient', rate: 0, message: 'Keep logging!' };
+
+    const latest = weights[0];
+    const weekAgo = weights.find(w => new Date(w.date) <= getDateRange(new Date(latest.date), 7));
+
+    if (!weekAgo) return { status: 'insufficient', rate: 0, message: 'Need 7 days data' };
+
+    const daysDiff = (new Date(latest.date) - new Date(weekAgo.date)) / (1000 * 60 * 60 * 24);
+    const weightDiff = weekAgo.weight - latest.weight; // Positive means lost weight
+    const ratePerWeek = (weightDiff / daysDiff) * 7;
+
+    if (ratePerWeek > 1.5) return { status: 'aggressive', rate: ratePerWeek, message: 'Too fast! careful.' };
+    if (ratePerWeek > 0.5) return { status: 'healthy', rate: ratePerWeek, message: 'Healthy pace! 🔥' };
+    if (ratePerWeek > 0) return { status: 'slow', rate: ratePerWeek, message: 'Steady progress.' };
+    return { status: 'gain', rate: ratePerWeek, message: 'Gained weight.' };
+};
+
 // Main App Component
 function WeightTrackPWA() {
     const [currentPage, setCurrentPage] = useState('dashboard');

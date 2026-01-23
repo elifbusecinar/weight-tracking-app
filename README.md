@@ -173,7 +173,71 @@ The app is fully responsive and works beautifully on:
 - No account required
 - Your weight data is completely private
 
-## 🐛 Troubleshooting
+## �️ Roadmap & Planned Features
+
+### 🧠 Smart Weight Loss Features
+- **📉 Weekly & Monthly Averages**: Weight fluctuations are smoothed using weekly/monthly average views.
+- **🔮 Goal Date Estimation**: Predicts the estimated date to reach target weight based on current trend.
+- **⚖️ Healthy Rate Indicator**: Warns if weight loss is too fast or too slow compared to healthy ranges.
+- **📊 Trend Line Overlay**: Displays a trend line on the chart to visualize long-term progress.
+
+### 🔔 Motivation & Habit Support
+- **⏰ Weigh-in Reminders**: Customizable daily/weekly notifications to remind users to log weight.
+- **🏆 Milestones & Achievements**: Celebrate milestones (e.g., first 2kg lost, consistency streaks).
+- **🔥 Streak Tracking**: Track consecutive days/weeks of weight logging.
+- **💬 Motivational Messages**: Context-aware encouragement based on recent progress.
+
+### 📝 Extended Tracking
+- **🧮 BMI & Compliance**: Automatic BMI calculation with visual category indicators.
+- **🥗 Optional Notes**: Add context tags like "cheat day", "workout day", or "felt bloated".
+- **💧 Water Intake**: Lightweight daily water consumption tracker.
+- **🏃 Activity Tagging**: Tag days with workout, rest, or high-activity markers.
+
+### 📊 Advanced Analytics
+- **📅 Calendar View**: Visual calendar showing days with weight entries.
+- **📤 Export/Import**: CSV/JSON support for manual backup and analysis.
+- **📊 Comparison Mode**: Compare two time ranges (e.g., last month vs this month).
+
+### 🔐 Data & Device Features
+- **☁️ Cloud Sync (V2)**: Optional sync across devices using Firebase/Supabase.
+- **🔑 App Lock**: PIN / Face ID protection for privacy.
+- **🧹 Data Management**: Manual backup and restore options.
+
+### 🎨 UI / UX Improvements
+- **🌙 Dark Mode**: Complete dark theme support.
+- **🎨 Theming**: Custom color themes.
+- **🧭 Onboarding**: Tutorial flow for first-time users.
+- **🪄 Animations**: Smooth chart transitions and haptic feedback on mobile.
+
+### 🤖 AI-Powered Capabilities (Experimental)
+- **🤖 AI Weight Loss Coach**: Simple advice based on trends (local logic).
+- **📅 Adaptive Goals**: Suggests realistic target updates based on progress.
+- **🧠 Pattern Detection**: Identifies plateaus or rebound patterns automatically.
+
+### 🧬 Metabolism & Body Insights
+- **🔥 BMR & TDEE Calculator**: Estimates daily calorie needs.
+- **🍽️ Calorie Deficit Estimator**: Shows deficit needed for target goal.
+- **⚠️ Plateau Detection**: Smart alerts when progress stalls.
+
+### 🔮 Long-term Vision
+- **Nutrition**: Lightweight macro tracking and meal photo attachments.
+- **Fitness**: Simple workout logging and recovery indicators.
+- **Psychology**: Mood tracking and habit consistency scores.
+- **Visualization**: Heatmaps, zoomable timelines, and correlation engines.
+- **Gamification**: Healthy badges and process-oriented levels.
+
+### ✨ Why This Roadmap Is Strong
+- ✅ **Real-world Impact**: Designed to genuinely help users with sustainable weight loss.
+- ✅ **Scalable Tech**: Backend-less MVP that is ready for future cloud integration.
+- ✅ **Product Thinking**: Demonstrates a focus on user needs and feature prioritization.
+- ✅ **Modern Stack**: A powerful combination of AI, Data Visualization, and PWA technologies.
+
+### 🔥 What Makes This App Different
+- **Not just tracking**: It understands patterns, habits, and sustainability.
+- **Privacy-first**: Offline-first architecture ensures data stays on your device.
+- **Human-centric**: Built for real humans, avoiding obsession and focusing on health.
+
+## �🐛 Troubleshooting
 
 ### App not loading?
 - Clear your browser cache
