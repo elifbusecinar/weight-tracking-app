@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import { Scale, TrendingDown, Plus, History, Settings, Target, Calendar, Trash2, Award, Activity, Moon, Sun, Sparkles, Download, Upload, Flame } from 'lucide-react';
+import { Scale, TrendingDown, Plus, History, Settings, Target, Calendar, Trash2, Award, Activity, Moon, Sun, Sparkles, Download, Upload, Flame, Droplets, Utensils, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 // Theme Context
 const ThemeContext = createContext();
@@ -111,7 +111,7 @@ const AnimatedBackground = ({ isDark }) => {
 
 // IndexedDB utility functions
 const DB_NAME = 'WeightTrackDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const initDB = () => {
     return new Promise((resolve, reject) => {
@@ -127,7 +127,82 @@ const initDB = () => {
             if (!db.objectStoreNames.contains('settings')) {
                 db.createObjectStore('settings', { keyPath: 'id' });
             }
+            // V2: Unified Daily Entries
+            if (!db.objectStoreNames.contains('daily_entries')) {
+                // Key is YYYY-MM-DD string
+                const entryStore = db.createObjectStore('daily_entries', { keyPath: 'date' });
+                entryStore.createIndex('date', 'date', { unique: true });
+            }
         };
+    });
+};
+
+// Data Migration Service
+const migrateWeightsToEntries = async () => {
+    const db = await initDB();
+    const tx = db.transaction(['weights', 'daily_entries'], 'readwrite');
+    const weightStore = tx.objectStore('weights');
+    const entryStore = tx.objectStore('daily_entries');
+
+    const entryCountReq = entryStore.count();
+
+    return new Promise((resolve, reject) => {
+        entryCountReq.onsuccess = () => {
+            if (entryCountReq.result === 0) {
+                // Migration needed if entries empty
+                const weightReq = weightStore.getAll();
+                weightReq.onsuccess = () => {
+                    const weights = weightReq.result;
+                    if (weights && weights.length > 0) {
+                        console.log("Migrating " + weights.length + " entries...");
+                        weights.forEach(w => {
+                            if (!w.date) return;
+                            try {
+                                const dateKey = new Date(w.date).toISOString().split('T')[0];
+                                const entry = {
+                                    date: dateKey,
+                                    weight: w.weight,
+                                    note: w.note || '',
+                                    createdAt: w.date,
+                                    updatedAt: new Date().toISOString()
+                                };
+                                entryStore.put(entry);
+                            } catch (e) {
+                                console.warn("Skipping invalid date entry during migration", w);
+                            }
+                        });
+                    }
+                    resolve(true);
+                };
+                weightReq.onerror = () => reject(weightReq.error);
+            } else {
+                resolve(false);
+            }
+        };
+        entryCountReq.onerror = () => reject(entryCountReq.error);
+    });
+};
+
+const saveDailyEntry = async (entry) => {
+    const db = await initDB();
+    if (!entry.date) throw new Error("Entry must have a date (YYYY-MM-DD)");
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('daily_entries', 'readwrite');
+        const store = tx.objectStore('daily_entries');
+        const request = store.put({ ...entry, updatedAt: new Date().toISOString() });
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+};
+
+const getDailyEntries = async () => {
+    const db = await initDB();
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction('daily_entries', 'readonly');
+        const store = tx.objectStore('daily_entries');
+        const request = store.getAll();
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
     });
 };
 
@@ -267,8 +342,7 @@ const getBMICategory = (bmi) => {
     return { name: 'Obese', color: 'text-red-500', bg: 'bg-red-500/20' };
 };
 
-return { name: 'Obese', color: 'text-red-500', bg: 'bg-red-500/20' };
-};
+
 
 const calculateStreak = (weights) => {
     if (!weights || weights.length === 0) return 0;
@@ -312,12 +386,31 @@ const getMotivationalMessage = (streak, totalChange) => {
     return "✨ Believe in yourself!";
 };
 
+const calculateBMR = (weight, height, age, gender) => {
+    // Mifflin-St Jeor Equation
+    if (!weight || !height || !age) return 0;
+    const s = gender === 'male' ? 5 : -161;
+    return (10 * weight) + (6.25 * height) + (5 * age) + s;
+};
+
+const calculateTDEE = (bmr, activityLevel) => {
+    const multipliers = {
+        sedentary: 1.2,
+        light: 1.375,
+        moderate: 1.55,
+        active: 1.725,
+        veryActive: 1.9
+    };
+    return Math.round(bmr * (multipliers[activityLevel] || 1.2));
+};
+
 // Main App Component
 function WeightTrackPWA() {
     const [currentPage, setCurrentPage] = useState('dashboard');
     const [weights, setWeights] = useState([]);
     const [settings, setSettings] = useState({ targetWeight: 70, unit: 'kg', height: 170 });
     const [loading, setLoading] = useState(true);
+    const [selectedDate, setSelectedDate] = useState(null); // For Calendar Modal
     const { isDark, toggleTheme } = useTheme();
 
     useEffect(() => {
@@ -326,12 +419,30 @@ function WeightTrackPWA() {
 
     const loadData = async () => {
         try {
-            const [weightsData, settingsData] = await Promise.all([
-                getAllWeights(),
-                getSettings()
-            ]);
-            setWeights(weightsData.sort((a, b) => new Date(b.date) - new Date(a.date)));
-            setSettings({ height: 170, ...settingsData }); // Ensure height exists with default
+            setLoading(true);
+
+            // 1. Run Migration (idempotent, checks if needed)
+            await migrateWeightsToEntries();
+
+            // 2. Load from new unified store
+            const entries = await getDailyEntries();
+            const settingsData = await getSettings();
+
+            // 3. Transform to compatible list
+            // We now load ALL entries for Calendar, but UI components might need filtering
+            const weightsList = entries.map(e => ({
+                id: e.date,
+                date: e.date,
+                weight: e.weight,
+                note: e.note,
+                water: e.water || 0,
+                calories: e.calories || 0,
+                activity: e.activity
+            }));
+
+            // Dashboard/Chart expects sorted by date desc
+            setWeights(weightsList.sort((a, b) => new Date(b.date) - new Date(a.date)));
+            setSettings({ height: 170, ...settingsData });
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -358,6 +469,17 @@ function WeightTrackPWA() {
         }
     };
 
+    const handleEntrySave = async (entry) => {
+        try {
+            await saveDailyEntry(entry);
+            await loadData();
+            setSelectedDate(null);
+        } catch (error) {
+            console.error('Error saving entry:', error);
+            alert('Failed to save entry');
+        }
+    };
+
     const handleUpdateSettings = async (newSettings) => {
         try {
             await saveSettings(newSettings);
@@ -380,7 +502,14 @@ function WeightTrackPWA() {
                 // Wait for transaction complete
                 tx.oncomplete = async () => {
                     setWeights([]);
-                    setSettings({ targetWeight: 70, unit: 'kg', height: 170 });
+                    setSettings({
+                        targetWeight: 70,
+                        unit: 'kg',
+                        height: 170,
+                        age: 30,
+                        gender: 'female',
+                        activityLevel: 'sedentary'
+                    });
                     await loadData();
                     alert('All data has been reset.');
                     setLoading(false);
@@ -459,7 +588,7 @@ function WeightTrackPWA() {
                             </div>
                             <div>
                                 <h1 className="text-2xl font-bold text-dark-bg dark:text-dark-text tracking-tight">
-                                    WeightTrack
+                                    WeightTrack v2.1
                                 </h1>
                                 <div className="flex items-center gap-2">
                                     <Sparkles className="w-3 h-3 text-rose dark:text-sage" />
@@ -487,6 +616,15 @@ function WeightTrackPWA() {
                                         }`}
                                 >
                                     <Activity className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage('calendar')}
+                                    className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'calendar'
+                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                        }`}
+                                >
+                                    <Calendar className="w-5 h-5" />
                                 </button>
                                 <button
                                     onClick={() => setCurrentPage('add')}
@@ -526,6 +664,9 @@ function WeightTrackPWA() {
                 {currentPage === 'dashboard' && (
                     <Dashboard weights={weights} settings={settings} onNavigate={setCurrentPage} />
                 )}
+                {currentPage === 'calendar' && (
+                    <CalendarView entries={weights} onDateSelect={setSelectedDate} />
+                )}
                 {currentPage === 'add' && (
                     <AddWeight onAdd={handleAddWeight} onCancel={() => setCurrentPage('dashboard')} />
                 )}
@@ -533,7 +674,20 @@ function WeightTrackPWA() {
                     <HistoryPage weights={weights} onDelete={handleDeleteWeight} unit={settings.unit} />
                 )}
                 {currentPage === 'settings' && (
-                    <SettingsPage settings={settings} onUpdate={handleUpdateSettings} weights={weights} onImport={handleImportData} onReset={handleResetData} />
+                    <SettingsPage settings={settings} onUpdate={handleUpdateSettings} weights={weights} onImport={async (data) => {
+                        // Simple reload for now, improving import later if needed
+                        await loadData();
+                    }} onReset={handleResetData} />
+                )}
+
+                {/* Calendar Detail Modal */}
+                {selectedDate && (
+                    <DayDetailModal
+                        date={selectedDate}
+                        entry={weights.find(w => w.date === selectedDate)}
+                        onClose={() => setSelectedDate(null)}
+                        onSave={handleEntrySave}
+                    />
                 )}
             </main>
 
@@ -549,6 +703,16 @@ function WeightTrackPWA() {
                     >
                         <Activity className="w-6 h-6" />
                         <span className="text-xs font-medium">Dash</span>
+                    </button>
+                    <button
+                        onClick={() => setCurrentPage('calendar')}
+                        className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all duration-300 ${currentPage === 'calendar'
+                            ? 'text-rose dark:text-sage scale-110'
+                            : 'text-sage-dark dark:text-dark-muted opacity-70'
+                            }`}
+                    >
+                        <Calendar className="w-6 h-6" />
+                        <span className="text-xs font-medium">Calendar</span>
                     </button>
                     <button
                         onClick={() => setCurrentPage('add')}
@@ -586,25 +750,298 @@ function WeightTrackPWA() {
     );
 }
 
+// Day Detail Modal Component (Bottom Sheet / Modal)
+function DayDetailModal({ date, entry, onClose, onSave }) {
+    const [weight, setWeight] = useState(entry?.weight || '');
+    const [water, setWater] = useState(entry?.water || 0);
+    const [calories, setCalories] = useState(entry?.calories || '');
+    const [note, setNote] = useState(entry?.note || '');
+    const [activity, setActivity] = useState(entry?.activity || '');
+
+    // "Smart Tags" Logic based on inputs
+    const getTags = () => {
+        const tags = [];
+        if (weight && water >= 8 && calories) tags.push({ text: 'Perfect Day', color: 'bg-green-100 text-green-700' });
+        else if (weight || water > 4 || calories) tags.push({ text: 'On Track', color: 'bg-orange-100 text-orange-700' });
+        if (water >= 8) tags.push({ text: 'Hydrated', color: 'bg-blue-100 text-blue-700' });
+        return tags;
+    };
+
+    const handleSave = () => {
+        onSave({
+            date,
+            weight: weight ? parseFloat(weight) : null,
+            water: parseInt(water),
+            calories: calories ? parseInt(calories) : null,
+            note,
+            activity
+        });
+        onClose();
+    };
+
+    const displayDate = new Date(date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center p-4 sm:p-6">
+            <div className="absolute inset-0 bg-black/40 backdrop-blur-sm fade-in" onClick={onClose} />
+            <div className="relative w-full max-w-md bg-white dark:bg-dark-bg rounded-2xl shadow-2xl p-6 slide-in-bottom theme-transition">
+                <button
+                    onClick={onClose}
+                    className="absolute top-4 right-4 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-sage-dark dark:text-dark-text transition-colors"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <h2 className="text-xl font-bold text-dark-bg dark:text-dark-text mb-1">{displayDate}</h2>
+                <div className="flex flex-wrap gap-2 mb-6">
+                    {getTags().map((tag, i) => (
+                        <span key={i} className={`text-xs font-bold px-2 py-1 rounded-full ${tag.color}`}>
+                            {tag.text}
+                        </span>
+                    ))}
+                    {!entry && getTags().length === 0 && (
+                        <span className="text-xs font-bold px-2 py-1 rounded-full bg-gray-100 text-gray-500">No Data Yet</span>
+                    )}
+                </div>
+
+                <div className="space-y-4">
+                    {/* Weight Input */}
+                    <div className="p-4 bg-rose/5 dark:bg-sage/5 rounded-xl border border-rose/10 dark:border-sage/10">
+                        <label className="block text-sm font-semibold text-rose dark:text-sage mb-2 flex items-center gap-2">
+                            <Scale className="w-4 h-4" /> Weight (kg)
+                        </label>
+                        <input
+                            type="number"
+                            step="0.1"
+                            placeholder="Enter weight..."
+                            value={weight}
+                            onChange={(e) => setWeight(e.target.value)}
+                            className="w-full px-4 py-2 bg-white dark:bg-dark-surface rounded-lg border-2 border-transparent focus:border-rose dark:focus:border-sage focus:ring-0 text-dark-bg dark:text-dark-text font-bold text-lg"
+                        />
+                    </div>
+
+                    {/* Water Tracker */}
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-100 dark:border-blue-800/30">
+                        <label className="block text-sm font-semibold text-blue-600 dark:text-blue-400 mb-3 flex items-center justify-between">
+                            <span className="flex items-center gap-2"><Droplets className="w-4 h-4" /> Water (Glasses)</span>
+                            <span className="text-2xl font-bold">{water}</span>
+                        </label>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setWater(Math.max(0, water - 1))}
+                                className="flex-1 py-2 bg-white dark:bg-dark-surface rounded-lg font-bold text-blue-500 shadow-sm hover:shadow-md transition-all active:scale-95"
+                            >
+                                -
+                            </button>
+                            <button
+                                onClick={() => setWater(water + 1)}
+                                className="flex-1 py-2 bg-blue-500 text-white rounded-lg font-bold shadow-sm hover:shadow-md transition-all active:scale-95 hover:bg-blue-600"
+                            >
+                                +
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Calories Input */}
+                    <div className="p-4 bg-orange-50 dark:bg-orange-900/10 rounded-xl border border-orange-100 dark:border-orange-800/30">
+                        <label className="block text-sm font-semibold text-orange-600 dark:text-orange-400 mb-2 flex items-center gap-2">
+                            <Utensils className="w-4 h-4" /> Calories (kcal)
+                        </label>
+                        <input
+                            type="number"
+                            placeholder="e.g. 2000"
+                            value={calories}
+                            onChange={(e) => setCalories(e.target.value)}
+                            className="w-full px-4 py-2 bg-white dark:bg-dark-surface rounded-lg border-2 border-transparent focus:border-orange-500 focus:ring-0 text-dark-bg dark:text-dark-text font-bold text-lg"
+                        />
+                    </div>
+
+                    {/* Notes Input */}
+                    <div>
+                        <textarea
+                            placeholder="Add notes about your day..."
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            className="w-full px-4 py-3 bg-gray-50 dark:bg-dark-surface rounded-xl border-2 border-transparent focus:border-sage focus:ring-0 text-dark-bg dark:text-dark-text min-h-[80px]"
+                        />
+                    </div>
+
+                    <button
+                        onClick={handleSave}
+                        className="w-full py-4 bg-gradient-primary-light dark:bg-gradient-primary-dark text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all text-lg"
+                    >
+                        Save Entry
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Calendar View Component
+function CalendarView({ entries, onDateSelect }) {
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    const getDaysInMonth = (date) => {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const days = new Date(year, month + 1, 0).getDate();
+        const firstDay = new Date(year, month, 1).getDay(); // 0 = Sun
+        return { days, firstDay: firstDay === 0 ? 6 : firstDay - 1 }; // Adjust for Mon start
+    };
+
+    const { days, firstDay } = getDaysInMonth(currentDate);
+    const monthName = currentDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+
+    const prevMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+    };
+
+    const nextMonth = () => {
+        setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+    };
+
+    const handleDayClick = (day) => {
+        const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day + 1).toISOString().split('T')[0];
+        onDateSelect(dateStr);
+    };
+
+    // lookup map for O(1) access
+    const entriesMap = entries.reduce((acc, e) => {
+        acc[e.date] = e;
+        return acc;
+    }, {});
+
+    const renderCalendarGrid = () => {
+        const grid = [];
+        // Empty cells for shift
+        for (let i = 0; i < firstDay; i++) {
+            grid.push(<div key={`empty-${i}`} className="h-24 md:h-32 bg-transparent" />);
+        }
+
+        for (let day = 1; day <= days; day++) {
+            const dateStr = new Date(currentDate.getFullYear(), currentDate.getMonth(), day + 1).toISOString().split('T')[0];
+            const entry = entriesMap[dateStr];
+            const isToday = dateStr === new Date().toISOString().split('T')[0];
+
+            // Status Logic
+            let statusColor = 'bg-white/50 dark:bg-dark-surface/50 border-transparent';
+            if (entry) {
+                if (entry.weight && entry.water >= 8 && entry.calories) statusColor = 'bg-green-100 dark:bg-green-900/20 border-green-200 dark:border-green-800'; // Perfect
+                else if (entry.weight || entry.water > 4 || entry.calories) statusColor = 'bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-800/30'; // Good/Partial
+            }
+            if (isToday) statusColor += ' ring-2 ring-rose dark:ring-sage ring-offset-2 dark:ring-offset-dark-bg';
+
+            grid.push(
+                <div
+                    key={day}
+                    onClick={() => handleDayClick(day)}
+                    className={`h-24 md:h-32 rounded-xl p-2 relative theme-transition hover-lift cursor-pointer border ${statusColor}`}
+                >
+                    <span className={`text-sm font-bold ${isToday ? 'text-rose dark:text-sage' : 'text-dark-bg dark:text-dark-text'}`}>
+                        {day}
+                    </span>
+
+                    {entry && (
+                        <div className="flex flex-col gap-1 mt-1">
+                            {entry.weight && (
+                                <div className="flex items-center gap-1">
+                                    <Scale className="w-3 h-3 text-rose dark:text-sage" />
+                                    <span className="text-xs font-medium text-dark-bg dark:text-dark-text">{entry.weight}</span>
+                                </div>
+                            )}
+                            {entry.water > 0 && (
+                                <div className="flex items-center gap-1">
+                                    <Droplets className="w-3 h-3 text-blue-500" />
+                                    {/* <span className="text-xs text-blue-500">{entry.water}</span> */}
+                                </div>
+                            )}
+                            {entry.calories > 0 && (
+                                <div className="flex items-center gap-1">
+                                    <Flame className="w-3 h-3 text-orange-500" />
+                                    {/* <span className="text-xs text-orange-500">{entry.calories}</span> */}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+        return grid;
+    };
+
+    return (
+        <div className="fade-in">
+            <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-bold text-dark-bg dark:text-dark-text">{monthName}</h2>
+                <div className="flex gap-2">
+                    <button onClick={prevMonth} className="p-2 glass rounded-lg hover:bg-rose/10"><ChevronLeft className="w-5 h-5 text-dark-bg dark:text-dark-text" /></button>
+                    <button onClick={nextMonth} className="p-2 glass rounded-lg hover:bg-rose/10"><ChevronRight className="w-5 h-5 text-dark-bg dark:text-dark-text" /></button>
+                </div>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2 md:gap-4 mb-2">
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => (
+                    <div key={d} className="text-center text-xs font-bold text-sage-dark dark:text-dark-muted py-2">
+                        {d}
+                    </div>
+                ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2 md:gap-4">
+                {renderCalendarGrid()}
+            </div>
+        </div>
+    );
+}
+
 // Dashboard Component
 function Dashboard({ weights, settings, onNavigate }) {
-    const latestWeight = weights[0];
-    const oldestWeight = weights[weights.length - 1];
+    // Filter for weight stats
+    const validWeights = weights.filter(w => w.weight > 0);
+    const latestWeight = validWeights[0];
+    const oldestWeight = validWeights[validWeights.length - 1];
     const totalChange = latestWeight && oldestWeight ? latestWeight.weight - oldestWeight.weight : 0;
     const targetDiff = latestWeight ? latestWeight.weight - settings.targetWeight : 0;
 
     // Smart Stats Calculations
-    const weeklyAvg = calculateAverage(weights, 7);
-    const monthlyAvg = calculateAverage(weights, 30);
-    const healthStatus = analyzeHealthRate(weights);
-    const trendData = calculateTrendLine(weights);
+    const weeklyAvg = calculateAverage(validWeights, 7);
+    const monthlyAvg = calculateAverage(validWeights, 30);
+    const healthStatus = analyzeHealthRate(validWeights);
+    const trendData = calculateTrendLine(validWeights);
+    const streak = calculateStreak(weights); // Streak uses ALL activity
+    const motivation = getMotivationalMessage(streak, totalChange);
+
+    // Calorie targets
+    const bmr = calculateBMR(latestWeight?.weight, settings.height, settings.age, settings.gender);
+    const tdee = calculateTDEE(bmr, settings.activityLevel);
+    const calorieTarget = tdee - 500; // Deficit for weight loss
+
+    // Water Tracker State (Simple local state for MVP, normally would be persisted)
+    const [water, setWater] = useState(() => {
+        const saved = localStorage.getItem('waterTracker');
+        if (saved) {
+            const { date, count } = JSON.parse(saved);
+            if (date === new Date().toLocaleDateString()) return count;
+        }
+        return 0;
+    });
+
+    const addWater = () => {
+        const newCount = water + 1;
+        setWater(newCount);
+        localStorage.setItem('waterTracker', JSON.stringify({
+            date: new Date().toLocaleDateString(),
+            count: newCount
+        }));
+    };
 
     // BMI Calculation
     const bmi = calculateBMI(latestWeight?.weight, settings.height);
     const bmiCategory = getBMICategory(bmi);
 
     // Merge trend data with chart data
-    const chartData = [...weights].reverse().map(w => {
+    const chartData = [...validWeights].reverse().map(w => {
         const trendPoint = trendData.find(t => t.date === w.date);
         return {
             date: new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
@@ -613,7 +1050,7 @@ function Dashboard({ weights, settings, onNavigate }) {
         };
     });
 
-    if (weights.length === 0) {
+    if (validWeights.length === 0 && weights.length === 0) {
         return (
             <div className="text-center py-16 fade-in">
                 <Scale className="w-24 h-24 text-rose-light dark:text-sage mx-auto mb-4 opacity-50 float" />
@@ -641,6 +1078,37 @@ function Dashboard({ weights, settings, onNavigate }) {
                 <div>
                     <h3 className="font-bold text-dark-bg dark:text-dark-text text-sm">{motivation}</h3>
                     {streak > 0 && <p className="text-xs text-sage-dark dark:text-dark-muted">You're on a {streak}-day streak!</p>}
+                </div>
+            </div>
+
+            {/* Daily Goals & Water Tracker */}
+            <div className="grid grid-cols-2 gap-4 stagger-children slide-in-bottom" style={{ animationDelay: '0.1s' }}>
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Calorie Target</span>
+                        <Utensils className="w-5 h-5 text-sage dark:text-rose-light" />
+                    </div>
+                    <p className="text-2xl font-bold text-dark-bg dark:text-dark-text mb-1">
+                        {calorieTarget > 0 ? calorieTarget : '-'} <span className="text-xs font-medium opacity-60">kcal</span>
+                    </p>
+                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">To lose 0.5kg/week</p>
+                </div>
+
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow cursor-pointer" onClick={addWater}>
+                    <div className="flex items-center justify-between mb-3">
+                        <span className="text-sage-dark dark:text-blue-400 text-sm font-semibold">Water</span>
+                        <Droplets className="w-5 h-5 text-blue-500" />
+                    </div>
+                    <div className="flex items-end gap-2 mb-1">
+                        <p className="text-3xl font-bold text-dark-bg dark:text-dark-text">{water}</p>
+                        <p className="text-sm font-medium text-sage-dark dark:text-dark-muted mb-1.5">/ 8</p>
+                    </div>
+                    <div className="w-full bg-sage/10 dark:bg-dark-surface rounded-full h-2 mt-2 overflow-hidden">
+                        <div
+                            className="bg-blue-500 h-full rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${Math.min((water / 8) * 100, 100)}%` }}
+                        />
+                    </div>
                 </div>
             </div>
 
@@ -987,19 +1455,22 @@ function HistoryPage({ weights, onDelete, unit }) {
 function SettingsPage({ settings, onUpdate, weights, onImport, onReset }) {
     const [targetWeight, setTargetWeight] = useState(settings.targetWeight);
     const [height, setHeight] = useState(settings.height || 170);
+    const [age, setAge] = useState(settings.age || 30);
+    const [gender, setGender] = useState(settings.gender || 'female');
+    const [activityLevel, setActivityLevel] = useState(settings.activityLevel || 'sedentary');
     const fileInputRef = React.useRef(null);
     const { isDark } = useTheme();
 
     const handleSave = () => {
         if (targetWeight > 0 && targetWeight < 500 && height > 50 && height < 300) {
-            onUpdate({ ...settings, targetWeight, height });
+            onUpdate({ ...settings, targetWeight, height, age, gender, activityLevel });
         }
     };
 
     const handleExport = () => {
         const data = {
             weights,
-            settings: { ...settings, targetWeight, height },
+            settings: { ...settings, targetWeight, height, age, gender, activityLevel },
             exportDate: new Date().toISOString()
         };
         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1029,6 +1500,9 @@ function SettingsPage({ settings, onUpdate, weights, onImport, onReset }) {
                 if (data.settings) {
                     setTargetWeight(data.settings.targetWeight);
                     setHeight(data.settings.height || 170);
+                    setAge(data.settings.age || 30);
+                    setGender(data.settings.gender || 'female');
+                    setActivityLevel(data.settings.activityLevel || 'sedentary');
                 }
             } catch (error) {
                 console.error('Import failed:', error);
@@ -1050,40 +1524,85 @@ function SettingsPage({ settings, onUpdate, weights, onImport, onReset }) {
 
                 <div className="space-y-6">
                     <div className="slide-in-bottom" style={{ animationDelay: '0.1s' }}>
-                        <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
-                            <Target className="w-4 h-4 inline mr-2" />
-                            Target Weight (kg)
-                        </label>
-                        <input
-                            type="number"
-                            step="0.1"
-                            value={targetWeight}
-                            onChange={(e) => setTargetWeight(parseFloat(e.target.value))}
-                            className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium"
-                        />
-                    </div>
+                        <h3 className="text-sm font-bold text-sage-dark dark:text-rose-light mb-4 flex items-center gap-2">
+                            <Target className="w-4 h-4" />
+                            Goals & Body Metrics
+                        </h3>
 
-                    <div className="slide-in-bottom" style={{ animationDelay: '0.15s' }}>
-                        <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
-                            <Activity className="w-4 h-4 inline mr-2" />
-                            Height (cm) <span className="text-xs font-normal opacity-70">(for BMI)</span>
-                        </label>
-                        <input
-                            type="number"
-                            value={height}
-                            onChange={(e) => setHeight(parseFloat(e.target.value))}
-                            className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium"
-                        />
-                    </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
+                                    Target Weight (kg)
+                                </label>
+                                <input
+                                    type="number"
+                                    step="0.1"
+                                    value={targetWeight}
+                                    onChange={(e) => setTargetWeight(parseFloat(e.target.value))}
+                                    className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium"
+                                />
+                            </div>
 
-                    <div className="slide-in-bottom" style={{ animationDelay: '0.2s' }}>
-                        <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">Unit</label>
-                        <div className="bg-rose/10 dark:bg-sage/10 px-4 py-3 rounded-xl">
-                            <p className="text-dark-bg dark:text-dark-text font-medium">Kilograms (kg)</p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
+                                        Height (cm)
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={height}
+                                        onChange={(e) => setHeight(parseFloat(e.target.value))}
+                                        className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
+                                        Age
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={age}
+                                        onChange={(e) => setAge(parseFloat(e.target.value))}
+                                        className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium"
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
+                                        Gender
+                                    </label>
+                                    <select
+                                        value={gender}
+                                        onChange={(e) => setGender(e.target.value)}
+                                        className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium"
+                                    >
+                                        <option value="female">Female</option>
+                                        <option value="male">Male</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
+                                        Activity Level
+                                    </label>
+                                    <select
+                                        value={activityLevel}
+                                        onChange={(e) => setActivityLevel(e.target.value)}
+                                        className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium text-sm"
+                                    >
+                                        <option value="sedentary">Sedentary (Little exercise)</option>
+                                        <option value="light">Light (1-3 days/week)</option>
+                                        <option value="moderate">Moderate (3-5 days/week)</option>
+                                        <option value="active">Active (6-7 days/week)</option>
+                                        <option value="veryActive">Very Active (Physical job)</option>
+                                    </select>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="slide-in-bottom pt-4 border-t border-rose/20 dark:border-sage/20" style={{ animationDelay: '0.25s' }}>
+                    <div className="slide-in-bottom pt-4 border-t border-rose/20 dark:border-sage/20" style={{ animationDelay: '0.2s' }}>
                         <h3 className="text-sm font-semibold text-sage-dark dark:text-dark-muted mb-3 flex items-center gap-2">
                             Data Management
                         </h3>
