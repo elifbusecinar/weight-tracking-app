@@ -283,13 +283,13 @@ function WeightTrackPWA() {
                                 onClick={toggleTheme}
                                 className="p-2.5 rounded-xl glass hover-lift hover-glow transform hover:scale-110 theme-transition shadow-lg"
                             >
-                                {isDark ? <Sun className="w-5 h-5 text-sage" /> : <Moon className="w-5 h-5 text-rose" />}
+                                {isDark ? <Sun className="w-5 h-5 text-rose-light" /> : <Moon className="w-5 h-5 text-sage" />}
                             </button>
                             <button
                                 onClick={() => setCurrentPage('dashboard')}
                                 className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'dashboard'
-                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
                                     }`}
                             >
                                 <Activity className="w-5 h-5" />
@@ -297,8 +297,8 @@ function WeightTrackPWA() {
                             <button
                                 onClick={() => setCurrentPage('add')}
                                 className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'add'
-                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
                                     }`}
                             >
                                 <Plus className="w-5 h-5" />
@@ -306,8 +306,8 @@ function WeightTrackPWA() {
                             <button
                                 onClick={() => setCurrentPage('history')}
                                 className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'history'
-                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
                                     }`}
                             >
                                 <History className="w-5 h-5" />
@@ -315,8 +315,8 @@ function WeightTrackPWA() {
                             <button
                                 onClick={() => setCurrentPage('settings')}
                                 className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'settings'
-                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
                                     }`}
                             >
                                 <Settings className="w-5 h-5" />
@@ -365,7 +365,7 @@ function Dashboard({ weights, settings, onNavigate }) {
                 <p className="text-sage-dark dark:text-dark-muted mb-6">Record your first weight entry to begin tracking your progress</p>
                 <button
                     onClick={() => onNavigate('add')}
-                    className="bg-gradient-rose dark:bg-gradient-sage hover:opacity-90 text-white px-6 py-3 rounded-xl font-medium theme-transition flex items-center gap-2 mx-auto shadow-glass hover-lift hover-glow"
+                    className="bg-gradient-primary-light dark:bg-gradient-primary-dark hover:opacity-90 text-white px-6 py-3 rounded-xl font-medium theme-transition flex items-center gap-2 mx-auto shadow-glass hover-lift hover-glow"
                 >
                     <Plus className="w-5 h-5" />
                     Add First Entry
@@ -380,8 +380,8 @@ function Dashboard({ weights, settings, onNavigate }) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
                 <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-sage-dark dark:text-dark-muted text-sm font-semibold">Current Weight</span>
-                        <Scale className="w-5 h-5 text-rose dark:text-sage" />
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Current Weight</span>
+                        <Scale className="w-5 h-5 text-sage dark:text-rose-light" />
                     </div>
                     <p className="text-4xl font-bold text-dark-bg dark:text-dark-text mb-1">{latestWeight.weight} {settings.unit}</p>
                     <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">{new Date(latestWeight.date).toLocaleDateString()}</p>
@@ -389,7 +389,7 @@ function Dashboard({ weights, settings, onNavigate }) {
 
                 <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-sage-dark dark:text-dark-muted text-sm font-semibold">Total Change</span>
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Total Change</span>
                         <TrendingDown className="w-5 h-5 text-sage dark:text-sage" />
                     </div>
                     <p className={`text-4xl font-bold mb-1 ${totalChange <= 0 ? 'text-sage dark:text-sage' : 'text-rose dark:text-rose-light'}`}>
@@ -400,8 +400,8 @@ function Dashboard({ weights, settings, onNavigate }) {
 
                 <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-sage-dark dark:text-dark-muted text-sm font-semibold">To Target</span>
-                        <Target className="w-5 h-5 text-rose dark:text-rose-light" />
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">To Target</span>
+                        <Target className="w-5 h-5 text-sage dark:text-rose-light" />
                     </div>
                     <p className={`text-4xl font-bold mb-1 ${targetDiff <= 0 ? 'text-sage dark:text-sage' : 'text-rose dark:text-rose-light'}`}>
                         {Math.abs(targetDiff).toFixed(1)} {settings.unit}
@@ -414,7 +414,7 @@ function Dashboard({ weights, settings, onNavigate }) {
             {chartData.length > 1 && (
                 <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition fade-in hover-lift">
                     <h3 className="text-lg font-bold text-dark-bg dark:text-dark-text mb-4 flex items-center gap-2">
-                        <Sparkles className="w-5 h-5 text-rose dark:text-sage" />
+                        <Sparkles className="w-5 h-5 text-sage dark:text-rose-light" />
                         Progress Chart
                     </h3>
                     <ResponsiveContainer width="100%" height={250}>
@@ -457,7 +457,7 @@ function Dashboard({ weights, settings, onNavigate }) {
             <div className="flex gap-4 fade-in">
                 <button
                     onClick={() => onNavigate('add')}
-                    className="flex-1 bg-gradient-rose dark:bg-gradient-sage hover:opacity-90 text-white py-4 rounded-2xl font-semibold theme-transition flex items-center justify-center gap-2 shadow-glass hover-lift hover-glow"
+                    className="flex-1 bg-gradient-primary-light dark:bg-gradient-primary-dark hover:opacity-90 text-white py-4 rounded-2xl font-semibold theme-transition flex items-center justify-center gap-2 shadow-glass hover-lift hover-glow"
                 >
                     <Plus className="w-5 h-5" />
                     Add Weight Entry
@@ -508,7 +508,7 @@ function AddWeight({ onAdd, onCancel }) {
             <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="bg-rose/20 dark:bg-sage/20 p-3 rounded-2xl hover-glow">
-                        <Plus className="w-6 h-6 text-rose dark:text-sage" />
+                        <Plus className="w-6 h-6 text-sage dark:text-rose-light" />
                     </div>
                     <h2 className="text-2xl font-bold text-dark-bg dark:text-dark-text">Add Weight Entry</h2>
                 </div>
@@ -553,7 +553,7 @@ function AddWeight({ onAdd, onCancel }) {
                     <div className="flex gap-3 pt-4 slide-in-bottom" style={{ animationDelay: '0.3s' }}>
                         <button
                             onClick={handleSubmit}
-                            className="flex-1 bg-gradient-rose dark:bg-gradient-sage hover:opacity-90 text-white py-3 rounded-xl font-semibold theme-transition shadow-glass hover-lift hover-glow"
+                            className="flex-1 bg-gradient-primary-light dark:bg-gradient-primary-dark hover:opacity-90 text-white py-3 rounded-xl font-semibold theme-transition shadow-glass hover-lift hover-glow"
                         >
                             Save Entry
                         </button>
@@ -612,8 +612,8 @@ function HistoryPage({ weights, onDelete, unit }) {
 
                             {change !== null && (
                                 <div className={`px-3 py-1 rounded-xl text-sm font-bold mr-3 ${change < 0 ? 'bg-sage/20 dark:bg-sage/30 text-sage-dark dark:text-sage' :
-                                        change > 0 ? 'bg-rose/20 dark:bg-rose/30 text-rose dark:text-rose-light' :
-                                            'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                                    change > 0 ? 'bg-rose/20 dark:bg-rose/30 text-rose dark:text-rose-light' :
+                                        'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                                     }`}>
                                     {change > 0 ? '+' : ''}{change.toFixed(1)} {unit}
                                 </div>
@@ -649,7 +649,7 @@ function SettingsPage({ settings, onUpdate }) {
             <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift">
                 <div className="flex items-center gap-3 mb-6">
                     <div className="bg-rose/20 dark:bg-sage/20 p-3 rounded-2xl hover-glow">
-                        <Settings className="w-6 h-6 text-rose dark:text-sage" />
+                        <Settings className="w-6 h-6 text-sage dark:text-rose-light" />
                     </div>
                     <h2 className="text-2xl font-bold text-dark-bg dark:text-dark-text">Settings</h2>
                 </div>
@@ -678,7 +678,7 @@ function SettingsPage({ settings, onUpdate }) {
 
                     <button
                         onClick={handleSave}
-                        className="w-full bg-gradient-rose dark:bg-gradient-sage hover:opacity-90 text-white py-3 rounded-xl font-semibold theme-transition shadow-glass hover-lift hover-glow slide-in-bottom"
+                        className="w-full bg-gradient-primary-light dark:bg-gradient-primary-dark hover:opacity-90 text-white py-3 rounded-xl font-semibold theme-transition shadow-glass hover-lift hover-glow slide-in-bottom"
                         style={{ animationDelay: '0.3s' }}
                     >
                         Save Settings
@@ -686,7 +686,7 @@ function SettingsPage({ settings, onUpdate }) {
 
                     <div className="pt-6 border-t border-rose/20 dark:border-sage/20 slide-in-bottom" style={{ animationDelay: '0.4s' }}>
                         <h3 className="font-bold text-dark-bg dark:text-dark-text mb-3 flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-rose dark:text-sage" />
+                            <Sparkles className="w-4 h-4 text-sage dark:text-rose-light" />
                             About WeightTrack
                         </h3>
                         <div className="space-y-2 text-sm text-sage-dark dark:text-dark-muted font-medium">
