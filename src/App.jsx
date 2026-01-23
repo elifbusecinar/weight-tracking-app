@@ -285,49 +285,53 @@ function WeightTrackPWA() {
                             >
                                 {isDark ? <Sun className="w-5 h-5 text-rose-light" /> : <Moon className="w-5 h-5 text-sage" />}
                             </button>
-                            <button
-                                onClick={() => setCurrentPage('dashboard')}
-                                className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'dashboard'
-                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
-                                    }`}
-                            >
-                                <Activity className="w-5 h-5" />
-                            </button>
-                            <button
-                                onClick={() => setCurrentPage('add')}
-                                className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'add'
-                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
-                                    }`}
-                            >
-                                <Plus className="w-5 h-5" />
-                            </button>
-                            <button
-                                onClick={() => setCurrentPage('history')}
-                                className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'history'
-                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
-                                    }`}
-                            >
-                                <History className="w-5 h-5" />
-                            </button>
-                            <button
-                                onClick={() => setCurrentPage('settings')}
-                                className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'settings'
-                                    ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
-                                    : 'glass text-dark-bg dark:text-dark-text hover-glow'
-                                    }`}
-                            >
-                                <Settings className="w-5 h-5" />
-                            </button>
+
+                            {/* Desktop Navigation */}
+                            <div className="hidden md:flex items-center gap-2">
+                                <button
+                                    onClick={() => setCurrentPage('dashboard')}
+                                    className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'dashboard'
+                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                        }`}
+                                >
+                                    <Activity className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage('add')}
+                                    className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'add'
+                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                        }`}
+                                >
+                                    <Plus className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage('history')}
+                                    className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'history'
+                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                        }`}
+                                >
+                                    <History className="w-5 h-5" />
+                                </button>
+                                <button
+                                    onClick={() => setCurrentPage('settings')}
+                                    className={`p-2.5 rounded-xl theme-transition hover-lift ${currentPage === 'settings'
+                                        ? 'bg-gradient-rose dark:bg-gradient-sage text-white shadow-lg'
+                                        : 'glass text-dark-bg dark:text-dark-text hover-glow'
+                                        }`}
+                                >
+                                    <Settings className="w-5 h-5" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="max-w-4xl mx-auto px-4 py-6 relative z-10">
+            <main className="max-w-4xl mx-auto px-4 py-6 relative z-10 pb-24 md:pb-6">
                 {currentPage === 'dashboard' && (
                     <Dashboard weights={weights} settings={settings} onNavigate={setCurrentPage} />
                 )}
@@ -341,6 +345,52 @@ function WeightTrackPWA() {
                     <SettingsPage settings={settings} onUpdate={handleUpdateSettings} />
                 )}
             </main>
+
+            {/* Mobile Bottom Navigation */}
+            <nav className="fixed bottom-0 left-0 right-0 glass shadow-glass-dark md:hidden z-50 pb-safe">
+                <div className="flex justify-around items-center p-4">
+                    <button
+                        onClick={() => setCurrentPage('dashboard')}
+                        className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all duration-300 ${currentPage === 'dashboard'
+                            ? 'text-rose dark:text-sage scale-110'
+                            : 'text-sage-dark dark:text-dark-muted opacity-70'
+                            }`}
+                    >
+                        <Activity className="w-6 h-6" />
+                        <span className="text-xs font-medium">Dash</span>
+                    </button>
+                    <button
+                        onClick={() => setCurrentPage('add')}
+                        className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all duration-300 ${currentPage === 'add'
+                            ? 'text-rose dark:text-sage scale-110'
+                            : 'text-sage-dark dark:text-dark-muted opacity-70'
+                            }`}
+                    >
+                        <Plus className="w-6 h-6" />
+                        <span className="text-xs font-medium">Add</span>
+                    </button>
+                    <button
+                        onClick={() => setCurrentPage('history')}
+                        className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all duration-300 ${currentPage === 'history'
+                            ? 'text-rose dark:text-sage scale-110'
+                            : 'text-sage-dark dark:text-dark-muted opacity-70'
+                            }`}
+                    >
+                        <History className="w-6 h-6" />
+                        <span className="text-xs font-medium">History</span>
+                    </button>
+                    <button
+                        onClick={() => setCurrentPage('settings')}
+                        className={`p-2 rounded-xl flex flex-col items-center gap-1 transition-all duration-300 ${currentPage === 'settings'
+                            ? 'text-rose dark:text-sage scale-110'
+                            : 'text-sage-dark dark:text-dark-muted opacity-70'
+                            }`}
+                    >
+                        <Settings className="w-6 h-6" />
+                        <span className="text-xs font-medium">Settings</span>
+                    </button>
+                </div>
+            </nav>
         </div>
     );
 }
