@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import { Scale, TrendingDown, Plus, History, Settings, Target, Calendar, Trash2, Award, Activity, Moon, Sun, Sparkles } from 'lucide-react';
+import { Scale, TrendingDown, Plus, History, Settings, Target, Calendar, Trash2, Award, Activity, Moon, Sun, Sparkles, Download, Upload } from 'lucide-react';
 
 // Theme Context
 const ThemeContext = createContext();
@@ -254,11 +254,24 @@ const analyzeHealthyRate = (weights) => {
     return { status: 'gain', rate: ratePerWeek, message: 'Gained weight.' };
 };
 
+const calculateBMI = (weight, heightCm) => {
+    if (!weight || !heightCm) return 0;
+    const heightM = heightCm / 100;
+    return Number((weight / (heightM * heightM)).toFixed(1));
+};
+
+const getBMICategory = (bmi) => {
+    if (bmi < 18.5) return { name: 'Underweight', color: 'text-blue-500', bg: 'bg-blue-500/20' };
+    if (bmi < 25) return { name: 'Normal', color: 'text-green-500', bg: 'bg-green-500/20' };
+    if (bmi < 30) return { name: 'Overweight', color: 'text-orange-500', bg: 'bg-orange-500/20' };
+    return { name: 'Obese', color: 'text-red-500', bg: 'bg-red-500/20' };
+};
+
 // Main App Component
 function WeightTrackPWA() {
     const [currentPage, setCurrentPage] = useState('dashboard');
     const [weights, setWeights] = useState([]);
-    const [settings, setSettings] = useState({ targetWeight: 70, unit: 'kg' });
+    const [settings, setSettings] = useState({ targetWeight: 70, unit: 'kg', height: 170 });
     const [loading, setLoading] = useState(true);
     const { isDark, toggleTheme } = useTheme();
 
@@ -273,7 +286,7 @@ function WeightTrackPWA() {
                 getSettings()
             ]);
             setWeights(weightsData.sort((a, b) => new Date(b.date) - new Date(a.date)));
-            setSettings(settingsData);
+            setSettings({ height: 170, ...settingsData }); // Ensure height exists with default
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -306,6 +319,71 @@ function WeightTrackPWA() {
             setSettings(newSettings);
         } catch (error) {
             console.error('Error updating settings:', error);
+        }
+    };
+
+    const handleResetData = async () => {
+        if (window.confirm('Are you sure you want to delete ALL data? This action cannot be undone.')) {
+            try {
+                setLoading(true);
+                // We need to delete all from both stores
+                const db = await initDB();
+                const tx = db.transaction(['weights', 'settings'], 'readwrite');
+                tx.objectStore('weights').clear();
+                tx.objectStore('settings').clear();
+
+                // Wait for transaction complete
+                tx.oncomplete = async () => {
+                    setWeights([]);
+                    setSettings({ targetWeight: 70, unit: 'kg', height: 170 });
+                    await loadData();
+                    alert('All data has been reset.');
+                    setLoading(false);
+                };
+            } catch (error) {
+                console.error('Reset error:', error);
+                setLoading(false);
+            }
+        }
+    };
+
+    const handleImportData = async (data) => {
+        try {
+            setLoading(true);
+            if (data.settings) {
+                await saveSettings(data.settings);
+                setSettings(data.settings);
+            }
+            if (Array.isArray(data.weights)) {
+                // Merge logic: Add weights one by one. addWeight handles ID generation.
+                // If we want to avoid duplicates precisely, we might check date/weight.
+                // For simplicity/safety, we'll just add them. 
+                // A better approach for "restore" is to clear and add, but "merge" is safer.
+                // Let's iterate and add if date doesn't exist?
+                // IndexedDB 'add' fails if key exists. 'put' overwrites.
+                // Our IDs are auto-increment.
+
+                // Strategy: Use 'put' to save imported entries. 
+                // We'll strip IDs from import to let DB generate new ones to avoid collision? 
+                // Or keep original IDs? If we keep original, we might overwrite.
+                // Let's strip IDs and check for duplicates by date.
+
+                const existingDates = new Set(weights.map(w => w.date));
+
+                for (const entry of data.weights) {
+                    if (!existingDates.has(entry.date)) {
+                        const { id, ...entryWithoutId } = entry; // Remove ID to auto-gen new one
+                        await addWeight(entryWithoutId);
+                    }
+                }
+            }
+            await loadData();
+            alert('Data imported successfully!');
+        } catch (error) {
+            console.error('Import error:', error);
+            alert('Error importing data');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -410,7 +488,7 @@ function WeightTrackPWA() {
                     <HistoryPage weights={weights} onDelete={handleDeleteWeight} unit={settings.unit} />
                 )}
                 {currentPage === 'settings' && (
-                    <SettingsPage settings={settings} onUpdate={handleUpdateSettings} />
+                    <SettingsPage settings={settings} onUpdate={handleUpdateSettings} weights={weights} onImport={handleImportData} onReset={handleResetData} />
                 )}
             </main>
 
@@ -470,10 +548,25 @@ function Dashboard({ weights, settings, onNavigate }) {
     const totalChange = latestWeight && oldestWeight ? latestWeight.weight - oldestWeight.weight : 0;
     const targetDiff = latestWeight ? latestWeight.weight - settings.targetWeight : 0;
 
-    const chartData = [...weights].reverse().map(w => ({
-        date: new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        weight: w.weight
-    }));
+    // Smart Stats Calculations
+    const weeklyAvg = calculateAverage(weights, 7);
+    const monthlyAvg = calculateAverage(weights, 30);
+    const healthStatus = analyzeHealthRate(weights);
+    const trendData = calculateTrendLine(weights);
+
+    // BMI Calculation
+    const bmi = calculateBMI(latestWeight?.weight, settings.height);
+    const bmiCategory = getBMICategory(bmi);
+
+    // Merge trend data with chart data
+    const chartData = [...weights].reverse().map(w => {
+        const trendPoint = trendData.find(t => t.date === w.date);
+        return {
+            date: new Date(w.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            weight: w.weight,
+            trend: trendPoint ? trendPoint.trend : null
+        };
+    });
 
     if (weights.length === 0) {
         return (
@@ -494,37 +587,80 @@ function Dashboard({ weights, settings, onNavigate }) {
 
     return (
         <div className="space-y-6">
-            {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 stagger-children">
-                <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
+            {/* Main Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow col-span-2 md:col-span-1">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Current Weight</span>
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Current</span>
                         <Scale className="w-5 h-5 text-sage dark:text-rose-light" />
                     </div>
-                    <p className="text-4xl font-bold text-dark-bg dark:text-dark-text mb-1">{latestWeight.weight} {settings.unit}</p>
-                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">{new Date(latestWeight.date).toLocaleDateString()}</p>
+                    <p className="text-3xl font-bold text-dark-bg dark:text-dark-text mb-1">{latestWeight.weight} <span className="text-xs font-medium opacity-60">{settings.unit}</span></p>
+                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium trunc">{new Date(latestWeight.date).toLocaleDateString()}</p>
                 </div>
 
-                <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
                     <div className="flex items-center justify-between mb-2">
-                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Total Change</span>
-                        <TrendingDown className="w-5 h-5 text-sage dark:text-sage" />
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">BMI</span>
+                        <Activity className="w-5 h-5 text-sage dark:text-sage" />
                     </div>
-                    <p className={`text-4xl font-bold mb-1 ${totalChange <= 0 ? 'text-sage dark:text-sage' : 'text-rose dark:text-rose-light'}`}>
-                        {totalChange > 0 ? '+' : ''}{totalChange.toFixed(1)} {settings.unit}
-                    </p>
-                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">Since {new Date(oldestWeight.date).toLocaleDateString()}</p>
+                    <p className="text-2xl font-bold text-dark-bg dark:text-dark-text mb-1">{bmi}</p>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${bmiCategory.bg} ${bmiCategory.color}`}>
+                        {bmiCategory.name}
+                    </span>
                 </div>
 
-                <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Weekly Avg</span>
+                        <Activity className="w-5 h-5 text-sage dark:text-sage" />
+                    </div>
+                    <p className="text-2xl font-bold text-dark-bg dark:text-dark-text mb-1">{weeklyAvg || '-'} <span className="text-xs font-medium opacity-60">{settings.unit}</span></p>
+                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">Last 7 Days</p>
+                </div>
+
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Monthly Avg</span>
+                        <Calendar className="w-5 h-5 text-sage dark:text-sage" />
+                    </div>
+                    <p className="text-2xl font-bold text-dark-bg dark:text-dark-text mb-1">{monthlyAvg || '-'} <span className="text-xs font-medium opacity-60">{settings.unit}</span></p>
+                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">Last 30 Days</p>
+                </div>
+
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
                     <div className="flex items-center justify-between mb-2">
                         <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">To Target</span>
                         <Target className="w-5 h-5 text-sage dark:text-rose-light" />
                     </div>
-                    <p className={`text-4xl font-bold mb-1 ${targetDiff <= 0 ? 'text-sage dark:text-sage' : 'text-rose dark:text-rose-light'}`}>
-                        {Math.abs(targetDiff).toFixed(1)} {settings.unit}
+                    <p className={`text-2xl font-bold mb-1 ${targetDiff <= 0 ? 'text-sage dark:text-sage' : 'text-rose dark:text-rose-light'}`}>
+                        {Math.abs(targetDiff).toFixed(1)} <span className="text-xs font-medium opacity-60">{settings.unit}</span>
                     </p>
-                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">Target: {settings.targetWeight} {settings.unit}</p>
+                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">Goal: {settings.targetWeight}</p>
+                </div>
+            </div>
+
+            {/* Health & Trends Section */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition hover-lift flex items-center justify-between">
+                    <div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Total Change</span>
+                            {totalChange < 0 && <TrendingDown className="w-4 h-4 text-sage" />}
+                        </div>
+                        <p className={`text-3xl font-bold ${totalChange <= 0 ? 'text-sage dark:text-sage' : 'text-rose dark:text-rose-light'}`}>
+                            {totalChange > 0 ? '+' : ''}{totalChange.toFixed(1)} {settings.unit}
+                        </p>
+                        <p className="text-xs text-sage-dark dark:text-dark-muted font-medium mt-1">Since start</p>
+                    </div>
+                    <div className="text-right">
+                        <div className={`inline-block px-3 py-1 rounded-full text-xs font-bold mb-1 
+                            ${healthStatus.status === 'healthy' ? 'bg-sage/20 text-sage' :
+                                healthStatus.status === 'aggressive' ? 'bg-rose/20 text-rose' :
+                                    'bg-gray-100 dark:bg-gray-700 text-gray-500'}`}>
+                            {healthStatus.status.toUpperCase()}
+                        </div>
+                        <p className="text-xs font-medium text-sage-dark dark:text-dark-muted max-w-[120px]">{healthStatus.message}</p>
+                    </div>
                 </div>
             </div>
 
@@ -533,7 +669,7 @@ function Dashboard({ weights, settings, onNavigate }) {
                 <div className="glass rounded-2xl p-6 shadow-glass dark:shadow-glass-dark theme-transition fade-in hover-lift">
                     <h3 className="text-lg font-bold text-dark-bg dark:text-dark-text mb-4 flex items-center gap-2">
                         <Sparkles className="w-5 h-5 text-sage dark:text-rose-light" />
-                        Progress Chart
+                        Progress & Trend
                     </h3>
                     <ResponsiveContainer width="100%" height={250}>
                         <AreaChart data={chartData}>
@@ -566,6 +702,16 @@ function Dashboard({ weights, settings, onNavigate }) {
                                 strokeWidth={3}
                                 fill="url(#colorWeight)"
                             />
+                            <Line
+                                type="monotone"
+                                dataKey="trend"
+                                stroke="#94a3b8" // Slate-400 for a subtle trend line
+                                strokeWidth={2}
+                                strokeDasharray="5 5"
+                                dot={false}
+                                activeDot={false}
+                                name="Trend"
+                            />
                         </AreaChart>
                     </ResponsiveContainer>
                 </div>
@@ -596,6 +742,7 @@ function Dashboard({ weights, settings, onNavigate }) {
 function AddWeight({ onAdd, onCancel }) {
     const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
     const [weight, setWeight] = useState('');
+    const [note, setNote] = useState('');
     const [error, setError] = useState('');
 
     const handleSubmit = () => {
@@ -612,7 +759,7 @@ function AddWeight({ onAdd, onCancel }) {
             return;
         }
 
-        onAdd({ date, weight: weightNum });
+        onAdd({ date, weight: weightNum, note });
     };
 
     const handleKeyPress = (e) => {
@@ -662,13 +809,26 @@ function AddWeight({ onAdd, onCancel }) {
                         />
                     </div>
 
+                    <div className="slide-in-bottom" style={{ animationDelay: '0.3s' }}>
+                        <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
+                            <Activity className="w-4 h-4 inline mr-2" />
+                            Note (Optional)
+                        </label>
+                        <textarea
+                            value={note}
+                            onChange={(e) => setNote(e.target.value)}
+                            placeholder="e.g. Ate heavy dinner, Post workout..."
+                            className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text placeholder:text-sage-dark/50 dark:placeholder:text-dark-muted/50 font-medium resize-none h-24"
+                        />
+                    </div>
+
                     {error && (
                         <div className="bg-rose/20 dark:bg-rose/30 text-rose dark:text-rose-light px-4 py-3 rounded-xl text-sm font-medium scale-in">
                             {error}
                         </div>
                     )}
 
-                    <div className="flex gap-3 pt-4 slide-in-bottom" style={{ animationDelay: '0.3s' }}>
+                    <div className="flex gap-3 pt-4 slide-in-bottom" style={{ animationDelay: '0.4s' }}>
                         <button
                             onClick={handleSubmit}
                             className="flex-1 bg-gradient-primary-light dark:bg-gradient-primary-dark hover:opacity-90 text-white py-3 rounded-xl font-semibold theme-transition shadow-glass hover-lift hover-glow"
@@ -726,6 +886,12 @@ function HistoryPage({ weights, onDelete, unit }) {
                                     month: 'short',
                                     day: 'numeric'
                                 })}</p>
+                                {entry.note && (
+                                    <p className="text-xs text-sage mt-1 italic opacity-80 flex items-center gap-1">
+                                        <Activity className="w-3 h-3" />
+                                        {entry.note}
+                                    </p>
+                                )}
                             </div>
 
                             {change !== null && (
@@ -752,14 +918,58 @@ function HistoryPage({ weights, onDelete, unit }) {
 }
 
 // Settings Component
-function SettingsPage({ settings, onUpdate }) {
+function SettingsPage({ settings, onUpdate, weights, onImport, onReset }) {
     const [targetWeight, setTargetWeight] = useState(settings.targetWeight);
+    const [height, setHeight] = useState(settings.height || 170);
+    const fileInputRef = React.useRef(null);
     const { isDark } = useTheme();
 
     const handleSave = () => {
-        if (targetWeight > 0 && targetWeight < 500) {
-            onUpdate({ ...settings, targetWeight });
+        if (targetWeight > 0 && targetWeight < 500 && height > 50 && height < 300) {
+            onUpdate({ ...settings, targetWeight, height });
         }
+    };
+
+    const handleExport = () => {
+        const data = {
+            weights,
+            settings: { ...settings, targetWeight, height },
+            exportDate: new Date().toISOString()
+        };
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `weight-track-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleImportClick = () => {
+        fileInputRef.current?.click();
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                onImport(data);
+                if (data.settings) {
+                    setTargetWeight(data.settings.targetWeight);
+                    setHeight(data.settings.height || 170);
+                }
+            } catch (error) {
+                console.error('Import failed:', error);
+                alert('Invalid backup file');
+            }
+        };
+        reader.readAsText(file);
     };
 
     return (
@@ -787,6 +997,19 @@ function SettingsPage({ settings, onUpdate }) {
                         />
                     </div>
 
+                    <div className="slide-in-bottom" style={{ animationDelay: '0.15s' }}>
+                        <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">
+                            <Activity className="w-4 h-4 inline mr-2" />
+                            Height (cm) <span className="text-xs font-normal opacity-70">(for BMI)</span>
+                        </label>
+                        <input
+                            type="number"
+                            value={height}
+                            onChange={(e) => setHeight(parseFloat(e.target.value))}
+                            className="w-full px-4 py-3 bg-white/50 dark:bg-dark-surface/50 border-2 border-rose/30 dark:border-sage/30 rounded-xl focus:ring-2 focus:ring-rose dark:focus:ring-sage focus:border-transparent theme-transition text-dark-bg dark:text-dark-text font-medium"
+                        />
+                    </div>
+
                     <div className="slide-in-bottom" style={{ animationDelay: '0.2s' }}>
                         <label className="block text-sm font-semibold text-sage-dark dark:text-dark-muted mb-2">Unit</label>
                         <div className="bg-rose/10 dark:bg-sage/10 px-4 py-3 rounded-xl">
@@ -794,10 +1017,52 @@ function SettingsPage({ settings, onUpdate }) {
                         </div>
                     </div>
 
+                    <div className="slide-in-bottom pt-4 border-t border-rose/20 dark:border-sage/20" style={{ animationDelay: '0.25s' }}>
+                        <h3 className="text-sm font-semibold text-sage-dark dark:text-dark-muted mb-3 flex items-center gap-2">
+                            Data Management
+                        </h3>
+                        <div className="flex gap-3">
+                            <button
+                                onClick={handleExport}
+                                className="flex-1 glass text-dark-bg dark:text-dark-text py-3 rounded-xl font-medium hover:bg-rose/10 dark:hover:bg-sage/10 theme-transition flex items-center justify-center gap-2 hover-lift"
+                            >
+                                <Download className="w-4 h-4" />
+                                Export
+                            </button>
+                            <button
+                                onClick={handleImportClick}
+                                className="flex-1 glass text-dark-bg dark:text-dark-text py-3 rounded-xl font-medium hover:bg-rose/10 dark:hover:bg-sage/10 theme-transition flex items-center justify-center gap-2 hover-lift"
+                            >
+                                <Upload className="w-4 h-4" />
+                                Import
+                            </button>
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={handleFileChange}
+                                className="hidden"
+                                accept=".json"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="slide-in-bottom pt-4 border-t border-rose/20 dark:border-sage/20" style={{ animationDelay: '0.3s' }}>
+                        <h3 className="text-sm font-semibold text-rose dark:text-rose-light mb-3 flex items-center gap-2">
+                            Danger Zone
+                        </h3>
+                        <button
+                            onClick={onReset}
+                            className="w-full glass bg-rose/10 text-rose dark:text-rose-light py-3 rounded-xl font-medium hover:bg-rose/20 theme-transition flex items-center justify-center gap-2 hover-lift"
+                        >
+                            <Trash2 className="w-4 h-4" />
+                            Reset All Data
+                        </button>
+                    </div>
+
                     <button
                         onClick={handleSave}
                         className="w-full bg-gradient-primary-light dark:bg-gradient-primary-dark hover:opacity-90 text-white py-3 rounded-xl font-semibold theme-transition shadow-glass hover-lift hover-glow slide-in-bottom"
-                        style={{ animationDelay: '0.3s' }}
+                        style={{ animationDelay: '0.35s' }}
                     >
                         Save Settings
                     </button>
