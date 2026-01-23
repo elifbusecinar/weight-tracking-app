@@ -1,6 +1,6 @@
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart } from 'recharts';
-import { Scale, TrendingDown, Plus, History, Settings, Target, Calendar, Trash2, Award, Activity, Moon, Sun, Sparkles, Download, Upload } from 'lucide-react';
+import { Scale, TrendingDown, Plus, History, Settings, Target, Calendar, Trash2, Award, Activity, Moon, Sun, Sparkles, Download, Upload, Flame } from 'lucide-react';
 
 // Theme Context
 const ThemeContext = createContext();
@@ -265,6 +265,51 @@ const getBMICategory = (bmi) => {
     if (bmi < 25) return { name: 'Normal', color: 'text-green-500', bg: 'bg-green-500/20' };
     if (bmi < 30) return { name: 'Overweight', color: 'text-orange-500', bg: 'bg-orange-500/20' };
     return { name: 'Obese', color: 'text-red-500', bg: 'bg-red-500/20' };
+};
+
+return { name: 'Obese', color: 'text-red-500', bg: 'bg-red-500/20' };
+};
+
+const calculateStreak = (weights) => {
+    if (!weights || weights.length === 0) return 0;
+
+    // Sort by date descending (should already be sorted but safe to ensure)
+    const sorted = [...weights].sort((a, b) => new Date(b.date) - new Date(a.date));
+    const today = new Date().toISOString().split('T')[0];
+    const latestDate = sorted[0].date;
+
+    // If latest entry is not today or yesterday, streak is broken (0)
+    // Check if latest is today or yesterday
+    const d1 = new Date(today);
+    const d2 = new Date(latestDate);
+    const diffTime = Math.abs(d1 - d2);
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > 1) return 0;
+
+    let streak = 1;
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const curr = new Date(sorted[i].date);
+        const next = new Date(sorted[i + 1].date);
+        const diff = (curr - next) / (1000 * 60 * 60 * 24);
+
+        if (diff === 1) {
+            streak++;
+        } else if (diff > 1) {
+            break; // Gap found, streak ends
+        }
+        // If diff === 0 (same day entries), continue (don't increment, don't break)
+    }
+    return streak;
+};
+
+const getMotivationalMessage = (streak, totalChange) => {
+    if (streak > 7) return "🔥 You're on fire! Unstoppable!";
+    if (streak > 3) return "⚡ Consistency is key! Keep it up!";
+    if (totalChange < -5) return "🎉 Amazing progress! You're doing great!";
+    if (totalChange < -1) return "💪 Nice work! Every gram counts.";
+    if (totalChange > 0) return "🛤️ It's a journey. Keep going!";
+    return "✨ Believe in yourself!";
 };
 
 // Main App Component
@@ -587,6 +632,18 @@ function Dashboard({ weights, settings, onNavigate }) {
 
     return (
         <div className="space-y-6">
+            {/* Motivation Banner */}
+            <div className={`p-4 rounded-2xl shadow-glass dark:shadow-glass-dark theme-transition slide-in-top flex items-center gap-3
+                ${streak > 2 ? 'bg-gradient-to-r from-orange-100 to-rose-100 dark:from-orange-900/20 dark:to-rose-900/20' : 'glass'}`}>
+                <div className={`p-2 rounded-xl ${streak > 2 ? 'bg-orange-500 text-white' : 'bg-sage/20 text-sage'}`}>
+                    {streak > 2 ? <Flame className="w-5 h-5" /> : <Sparkles className="w-5 h-5" />}
+                </div>
+                <div>
+                    <h3 className="font-bold text-dark-bg dark:text-dark-text text-sm">{motivation}</h3>
+                    {streak > 0 && <p className="text-xs text-sage-dark dark:text-dark-muted">You're on a {streak}-day streak!</p>}
+                </div>
+            </div>
+
             {/* Main Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 stagger-children">
                 <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow col-span-2 md:col-span-1">
@@ -596,6 +653,15 @@ function Dashboard({ weights, settings, onNavigate }) {
                     </div>
                     <p className="text-3xl font-bold text-dark-bg dark:text-dark-text mb-1">{latestWeight.weight} <span className="text-xs font-medium opacity-60">{settings.unit}</span></p>
                     <p className="text-xs text-sage-dark dark:text-dark-muted font-medium trunc">{new Date(latestWeight.date).toLocaleDateString()}</p>
+                </div>
+
+                <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-sage-dark dark:text-rose-light text-sm font-semibold">Streak</span>
+                        <Flame className={`w-5 h-5 ${streak > 0 ? 'text-orange-500' : 'text-sage dark:text-sage'}`} />
+                    </div>
+                    <p className="text-2xl font-bold text-dark-bg dark:text-dark-text mb-1">{streak} <span className="text-xs font-medium opacity-60">days</span></p>
+                    <p className="text-xs text-sage-dark dark:text-dark-muted font-medium">Keep it up!</p>
                 </div>
 
                 <div className="glass rounded-2xl p-5 shadow-glass dark:shadow-glass-dark theme-transition hover-lift hover-glow">
