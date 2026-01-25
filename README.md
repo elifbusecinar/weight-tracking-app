@@ -211,12 +211,90 @@ weight-tracking-app/
 - [x] BMR & TDEE Calculator 🧮
 - [x] Unified Calendar View 📅
 
-### 🚀 Upcoming Features (Planned)
-- **☁️ Cloud Sync**: Optional sync across devices.
-- **🔔 Reminders**: Daily notifications to log weight.
-- **📸 Photo Progress**: Attach photos to weight entries.
-- **🔐 App Lock**: PIN protection for privacy.
-- **Not just tracking**: It understands patterns, habits, and sustainability.
+### 🗺️ PLANNED FEATURES ROADMAP
+
+#### 🧱 PHASE 1 — Data Nerd Foundation (Data & Visualization)
+**🎯 Goal**: "See everything clearly and measurably"
+
+- **📈 Advanced Weight Analytics**
+    - Weight Trend Line (EMA / Moving Average)
+    - Weekly & Monthly Rolling Averages
+    - Weight Volatility Indicator (high/low fluctuation)
+- **🧮 Energy Balance Dashboard**
+    - TDEE vs Intake Bar (daily & weekly)
+    - Calorie Deficit / Surplus Gauge
+    - Estimated Fat Loss Projection (7000 kcal ≈ 1 kg rule)
+- **💧 Hydration Heatmap**
+    - 30-day water intake heatmap
+    - Consistency score
+    - Correlation view: Water vs Weight change
+- **📊 Weekly Comparison View**
+    - This week vs last week comparisons (Avg weight, calories, activity, sleep)
+    - Percentage delta indicators (+ / −)
+- **🔎 Filters & Toggles**
+    - Date range selector
+    - Metric toggles (weight / calories / water / sleep)
+    - Smoothing on/off
+- **📤 Export & Data Access**
+    - Export CSV / JSON
+    - Screenshot-ready chart mode
+    - Read-only "report view"
+
+#### 🧠 PHASE 2 — Health Insight Engine (Analysis & Reasoning)
+**🎯 Goal**: Answer "Why isn't it working?"
+
+- **⚠️ Insight Cards (Rule-based v1)**
+    - Plateau Detection
+    - Over-Deficit Warning
+    - Inconsistent Logging Risk
+    - Sleep Deprivation Flag
+    - *Example Insight*: "Last 10 days avg sleep < 6h" → *Impact*: "Weight trend flattened" → *Suggestion*: "Sleep > 7h for 5 days"
+- **🔍 Cause → Effect Mapping**
+    - Correlation analysis: Weight vs Calories / Sleep / Water
+    - Highlight strongest factors: "Among tracked factors, sleep shows the strongest impact."
+- **📉 Risk Scoring System**
+    - Overall Progress Risk Score (0–100)
+    - Factors: Logging consistency, Sleep, Deficit size, Weight volatility
+    - UI: Green / Yellow / Red risk bands
+- **🧪 Experiment Suggestions**
+    - Auto-generated experiments: "Increase protein for 7 days", "Reduce calories by 150", "Sleep challenge: 7h+"
+    - Pre vs Post comparison
+
+#### 🔥 PHASE 3 — Habit System (Behavior & Consistency)
+**🎯 Goal**: "Keep going"
+
+- **✅ Daily Habit Checklist**
+    - Log weight, Hit water goal, Stay within calorie range, Move (steps/activity)
+- **🔥 Streak Engine**
+    - Per-habit streaks
+    - Longest streak
+    - Streak freeze (limited)
+- **📅 Habit Heatmap**
+    - Calendar-based habit completion
+    - Color-coded consistency
+- **🎯 Micro Goals**
+    - Auto-generated weekly goals with adaptive difficulty
+    - Completion celebrations 🎉
+
+#### 🧩 PHASE 4 — Unified Dashboard Experience
+**🎯 Goal**: Control, not clutter
+
+- **🧭 Dashboard Modes**
+    - **Default View**: Habit + Key Insights
+    - **Data Nerd Mode**: Full analytics
+    - **Insight Mode**: Risks & causes
+    - Toggle between modes
+- **🧠 Smart Prioritization**
+    - Top 1–2 most important insights shown at the top
+    - Lower priority items collapsed
+
+#### 🚀 PHASE 5 — Advanced / CV-Killer Features
+*(Optional but powerful)*
+
+- **Personal Baseline Learning**: User-specific healthy loss rate
+- **Adaptive TDEE Recalculation**: Adjusts based on actual progress
+- **Cloud Sync**: Opt-in backup
+- **Premium Insight Unlocks**: Advanced data analysis
 
 ## 🐛 Troubleshooting
 
