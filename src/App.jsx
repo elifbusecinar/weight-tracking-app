@@ -1007,7 +1007,7 @@ function Dashboard({ weights, settings, onNavigate }) {
     // Smart Stats Calculations
     const weeklyAvg = calculateAverage(validWeights, 7);
     const monthlyAvg = calculateAverage(validWeights, 30);
-    const healthStatus = analyzeHealthRate(validWeights);
+    const healthStatus = analyzeHealthyRate(validWeights);
     const trendData = calculateTrendLine(validWeights);
     const streak = calculateStreak(weights); // Streak uses ALL activity
     const motivation = getMotivationalMessage(streak, totalChange);
@@ -1019,10 +1019,16 @@ function Dashboard({ weights, settings, onNavigate }) {
 
     // Water Tracker State (Simple local state for MVP, normally would be persisted)
     const [water, setWater] = useState(() => {
-        const saved = localStorage.getItem('waterTracker');
-        if (saved) {
-            const { date, count } = JSON.parse(saved);
-            if (date === new Date().toLocaleDateString()) return count;
+        try {
+            const saved = localStorage.getItem('waterTracker');
+            if (saved) {
+                const { date, count } = JSON.parse(saved);
+                if (date === new Date().toLocaleDateString()) return count;
+            }
+        } catch (error) {
+            console.warn('Failed to parse water tracker data:', error);
+            // Optionally clear bad data
+            localStorage.removeItem('waterTracker');
         }
         return 0;
     });

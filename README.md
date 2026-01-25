@@ -110,6 +110,7 @@ weight-tracking-app/
 │   └── sw.js                 # Service worker
 ├── src/
 │   ├── App.jsx               # Main app component
+│   ├── ErrorBoundary.jsx     # Error handling wrapper
 │   ├── main.jsx              # Entry point
 │   └── index.css             # Global styles
 ├── index.html                # HTML template
@@ -143,6 +144,12 @@ weight-tracking-app/
 2. Click the trash icon next to the entry you want to delete
 3. The entry will be removed immediately
 
+### 📅 Calendar View & Daily Details
+1. Click the Calendar icon in the navigation
+2. Select any date to view or edit details
+3. Track additional metrics like Water 💧, Calories 🍎, and Activity 🏃‍♂️
+4. See "Day Quality" tags based on your inputs
+
 ## 🎯 Features in Detail
  
 ### 🧠 Smart Statistics & Analytics
@@ -161,11 +168,16 @@ weight-tracking-app/
 - **Height Setting**: Customizable height for accurate BMI calculation.
 - **History View**: detailed list with notes and daily changes.
 
-### �️ Data Management
+### 💾 Data Management
 - **IndexedDB Storage**: Secure, offline-first local storage.
-- **📤 Export Data**: Download your full history as a JSON backup.
-- **� Import Data**: Restore your data on any device.
-- **�️ Reset Option**: "Danger zone" to clear data if needed.
+- **📤 Import/Export**: Backup and restore your data via JSON.
+- **⚠️ Reset Option**: "Danger zone" to clear data if needed.
+
+### 🥗 Nutrition & Activity (New)
+- **Water Tracking**: Log daily water intake 💧.
+- **Calorie Logging**: Track daily calorie consumption 🍎.
+- **Activity Notes**: Keep track of your workouts 🏃‍♂️.
+- **BMR & TDEE**: Automatic calculation of your metabolic rates based on stats 🧮.
 
 ### 📱 PWA & UX
 - **Installable**: Works like a native app on iOS and Android.
@@ -192,17 +204,21 @@ weight-tracking-app/
 - [x] Export/Import (JSON)
 - [x] Manual Backup & Restore
 
-### 🚀 Upcoming Features (V2)
+### ✅ Advanced Tracking (V2 Implemented)
+- [x] Water Intake Tracking 💧
+- [x] Calorie Logging 🍎
+- [x] Activity Type Tracking 🏃‍♂️
+- [x] BMR & TDEE Calculator 🧮
+- [x] Unified Calendar View 📅
+
+### 🚀 Upcoming Features (Planned)
 - **☁️ Cloud Sync**: Optional sync across devices.
 - **🔔 Reminders**: Daily notifications to log weight.
-- **💧 Water Tracking**: Daily water intake logger.
 - **📸 Photo Progress**: Attach photos to weight entries.
 - **🔐 App Lock**: PIN protection for privacy.
 - **Not just tracking**: It understands patterns, habits, and sustainability.
-- **Privacy-first**: Offline-first architecture ensures data stays on your device.
-- **Human-centric**: Built for real humans, avoiding obsession and focusing on health.
 
-## �🐛 Troubleshooting
+## 🐛 Troubleshooting
 
 ### App not loading?
 - Clear your browser cache
